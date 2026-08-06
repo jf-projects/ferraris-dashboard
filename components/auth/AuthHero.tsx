@@ -5,7 +5,7 @@ export default function AuthHero() {
     <section className="relative hidden lg:block">
 
       <Image
-        src="/images/bg.jpg"
+        src="/images/bg2.jpg"
         alt="Login Background"
         fill
         priority
