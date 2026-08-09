@@ -6,11 +6,11 @@ import {
     LayoutDashboard,
     Building2,
     Users,
-    CalendarDays,
-    FileText,
+    Banknote,
+    // FileText,
     UserRound,
     ChartColumn,
-    Bell,
+    // Bell,
     Settings,
     LogOut,
 } from "lucide-react";
@@ -22,16 +22,16 @@ type SidebarProps = {
 
 const mainMenu = [
     { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { title: "Properties", href: "/properties", icon: Building2 },
+    { title: "Properties", href: "/lot-transactions", icon: Building2 },
     { title: "Clients", href: "/clients", icon: Users },
-    { title: "Calendar", href: "/calendar", icon: CalendarDays },
-    { title: "Documents", href: "/documents", icon: FileText },
+    { title: "Payments", href: "/payments", icon: Banknote },
+    // { title: "Documents", href: "/documents", icon: FileText },
 ];
 
 const managementMenu = [
-    { title: "Agents", href: "/agents", icon: UserRound },
+    { title: "Users", href: "/users", icon: UserRound },
     { title: "Reports", href: "/reports", icon: ChartColumn },
-    { title: "Notifications", href: "/notifications", icon: Bell },
+    // { title: "Notifications", href: "/notifications", icon: Bell },
 ];
 
 const accountMenu = [

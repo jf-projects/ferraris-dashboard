@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/app/db";
 import { Client } from "@/app/db/schema";
+import { createAuditLog } from "../../logs/route";
 
 export async function GET(
     request: Request,
@@ -21,6 +22,7 @@ export async function GET(
                 )
             )
             .limit(1);
+        console.log(client);
 
         if (!client.length) {
             return NextResponse.json(
@@ -58,9 +60,10 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = await params;
+        const { id } = await params
+        const clientId = Number(id)
 
-        const body = await request.json();
+        const body = await request.json()
 
         const {
             firstName,
@@ -77,19 +80,19 @@ export async function PUT(
             bday,
             image,
             email,
-            clientId,
-        } = body;
+            clientId: clientIdValue,
+        } = body
 
         const existingClient = await db
             .select()
             .from(Client)
             .where(
                 and(
-                    eq(Client.id, Number(id)),
+                    eq(Client.id, clientId),
                     isNull(Client.deletedAt)
                 )
             )
-            .limit(1);
+            .limit(1)
 
         if (!existingClient.length) {
             return NextResponse.json(
@@ -100,8 +103,10 @@ export async function PUT(
                 {
                     status: 404,
                 }
-            );
+            )
         }
+
+        const oldClient = existingClient[0]
 
         if (email) {
             const duplicate = await db
@@ -113,11 +118,11 @@ export async function PUT(
                         isNull(Client.deletedAt)
                     )
                 )
-                .limit(1);
+                .limit(1)
 
             if (
                 duplicate.length &&
-                duplicate[0].id !== Number(id)
+                duplicate[0].id !== clientId
             ) {
                 return NextResponse.json(
                     {
@@ -127,11 +132,11 @@ export async function PUT(
                     {
                         status: 409,
                     }
-                );
+                )
             }
         }
 
-        const updatedClient = await db
+        const [updatedClient] = await db
             .update(Client)
             .set({
                 firstName,
@@ -148,19 +153,31 @@ export async function PUT(
                 bday,
                 image,
                 email,
-                clientId,
+                clientId: clientIdValue,
                 updatedAt: new Date(),
             })
-            .where(eq(Client.id, Number(id)))
-            .returning();
+            .where(eq(Client.id, clientId))
+            .returning()
+
+        console.log("OLD:", oldClient)
+        console.log("NEW:", updatedClient)
+
+        await createAuditLog({
+            userId: "74cd4a4b-3830-49e5-b3dd-083ba22ab23c",
+            action: "UPDATE",
+            entity: "Client",
+            modelId: clientId,
+            oldValue: oldClient,
+            newValue: updatedClient,
+        })
 
         return NextResponse.json({
             success: true,
             message: "Client updated successfully.",
-            data: updatedClient[0],
-        });
+            data: updatedClient,
+        })
     } catch (error) {
-        console.error(error);
+        console.error("Update client error:", error)
 
         return NextResponse.json(
             {
@@ -170,7 +187,7 @@ export async function PUT(
             {
                 status: 500,
             }
-        );
+        )
     }
 }
 

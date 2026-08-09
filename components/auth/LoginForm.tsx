@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthInput from "./AuthInput";
+import { supabase } from "@/lib/supabase";
 
 export default function LoginForm() {
     const router = useRouter();
@@ -38,6 +39,11 @@ export default function LoginForm() {
                 setError(data.message || "Invalid email or password");
                 return;
             }
+
+            await supabase.auth.setSession({
+                access_token: data.access_token,
+                refresh_token: data.refresh_token,
+            });
 
             router.replace("/dashboard");
             router.refresh();

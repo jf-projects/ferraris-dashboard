@@ -1,12 +1,16 @@
 import {
-    pgTable,
     uuid,
-    varchar,
+    date,
+    pgTable,
     serial,
+    integer,
+    varchar,
     text,
     timestamp,
-    date
-} from "drizzle-orm/pg-core";
+    doublePrecision,
+    numeric,
+    jsonb,
+} from "drizzle-orm/pg-core"
 
 export const User = pgTable("User", {
     id: uuid("id").primaryKey(),
@@ -17,8 +21,7 @@ export const User = pgTable("User", {
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
     deletedAt: timestamp("deletedAt"),
-});
-
+})
 
 export const Client = pgTable("Client", {
     id: serial("id").primaryKey(),
@@ -40,4 +43,66 @@ export const Client = pgTable("Client", {
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
     deletedAt: timestamp("deletedAt"),
-});
+})
+
+export const LotTransaction = pgTable("LotTransaction", {
+    id: serial("id").primaryKey(),
+    clientId: integer("clientId")
+        .references(() => Client.id)
+        .notNull(),
+    propertyUnit: varchar("propertyUnit", { length: 255 }),
+    totalPropertySize: integer("totalPropertySize"),
+    type: varchar("type", { length: 100 }),
+    unitBlock: varchar("unitBlock", { length: 100 }),
+    unitLot: varchar("unitLot", { length: 100 }),
+    propertyUnitAddress: varchar("propertyUnitAddress", { length: 255 }),
+    downpayment: doublePrecision("downpayment"),
+    paymentTerms: varchar("paymentTerms", { length: 255 }),
+    incrementValues: text("incrementValues"),
+    interest: doublePrecision("interest"),
+    sqm: doublePrecision("sqm"),
+    incrementAmount: doublePrecision("incrementAmount"),
+    transactionDate: timestamp("transactionDate"),
+    autocompute: integer("autocompute"),
+    propertyTotalAmount: doublePrecision("propertyTotalAmount"),
+    dueDate: timestamp("dueDate"),
+    interestDate: timestamp("interestDate"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+    deletedAt: timestamp("deletedAt"),
+})
+
+export const Payment = pgTable("Payment", {
+    id: serial("id").primaryKey(),
+    lotTransactionId: integer("lotTransactionId")
+        .references(() => LotTransaction.id)
+        .notNull(),
+    amount: numeric("amount", {
+        precision: 12,
+        scale: 2,
+    }),
+    bank: text("bank"),
+    paymentDate: timestamp("paymentDate"),
+    remarks: text("remarks"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+    deletedAt: timestamp("deletedAt"),
+})
+
+export const Logs = pgTable("Logs", {
+    id: serial("id").primaryKey(),
+    userId: uuid("userId")
+        .references(() => User.id)
+        .notNull(),
+    action: varchar("action", {
+        length: 20,
+    }).notNull(),
+    entity: varchar("entity", {
+        length: 100,
+    }).notNull(),
+    modelId: integer("modelId").notNull(),
+    changes: jsonb("changes"),
+    createdAt: timestamp("createdAt")
+        .defaultNow()
+        .notNull(),
+})

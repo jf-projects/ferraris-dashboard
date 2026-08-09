@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Manrope } from "next/font/google";
-
+import { Toaster
+  
+ } from "sonner";
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-manrope",
@@ -29,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-     <body className={`${manrope.variable} antialiased`}>{children}</body>
+     <body className={`${manrope.variable} antialiased`}>{children}<Toaster richColors position="top-right" /></body>
     </html>
   );
 }

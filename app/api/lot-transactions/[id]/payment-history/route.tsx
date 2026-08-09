@@ -161,16 +161,6 @@ export async function GET(
             )
         }
 
-        if (!incrementValues.length) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: "No increment values found."
-                },
-                { status: 400 }
-            )
-        }
-
         /*
         |--------------------------------------------------------------------------
         | AMOUNTS
@@ -192,6 +182,21 @@ export async function GET(
 
         /*
         |--------------------------------------------------------------------------
+        | DEFAULT MONTHLY PAYMENT
+        |--------------------------------------------------------------------------
+        |
+        | If there are no increment values:
+        |
+        | (total amount - downpayment) / total months
+        |
+        */
+
+        const defaultMonthlyDue = round(
+            financedAmount / totalMonths
+        )
+
+        /*
+        |--------------------------------------------------------------------------
         | INTEREST
         |--------------------------------------------------------------------------
         |
@@ -203,7 +208,8 @@ export async function GET(
         |
         | January 2026 = unpaid month 1
         | February 2026 = unpaid month 2
-        | March 2026 = unpaid month 3-> interest starts
+        | March 2026 = unpaid month 3
+        | April 2026 = unpaid month 4 -> interest
         |
         */
 
@@ -366,11 +372,6 @@ export async function GET(
         |--------------------------------------------------------------------------
         | INTEREST UNPAID MONTH COUNTER
         |--------------------------------------------------------------------------
-        |
-        | IMPORTANT:
-        |
-        | This counter ONLY starts at interestDate.
-        |
         */
 
         let interestUnpaidMonths = 0
@@ -396,7 +397,7 @@ export async function GET(
         | PREVIOUS TOTAL AMOUNT DUE
         |--------------------------------------------------------------------------
         |
-        | This is used as the base for cumulative interest.
+        | Used as the base for cumulative interest.
         |
         */
 
@@ -427,22 +428,35 @@ export async function GET(
             |--------------------------------------------------------------------------
             | MONTHLY DUE
             |--------------------------------------------------------------------------
+            |
+            | If incrementValues exist:
+            |     Use the configured increment schedule.
+            |
+            | If no incrementValues exist:
+            |     Use financedAmount / totalMonths.
+            |
             */
 
-            const block = Math.floor(
-                index / 60
-            )
+            let dueAmount = 0
 
-            const dueAmount = round(
-                Number(
-                    incrementValues[
-                    Math.min(
-                        block,
-                        incrementValues.length - 1
-                    )
-                    ] || 0
+            if (incrementValues.length > 0) {
+                const block = Math.floor(
+                    index / 60
                 )
-            )
+
+                dueAmount = round(
+                    Number(
+                        incrementValues[
+                            Math.min(
+                                block,
+                                incrementValues.length - 1
+                            )
+                        ] || 0
+                    )
+                )
+            } else {
+                dueAmount = defaultMonthlyDue
+            }
 
             /*
             |--------------------------------------------------------------------------
@@ -558,10 +572,6 @@ export async function GET(
             |--------------------------------------------------------------------------
             | INTEREST PERIOD
             |--------------------------------------------------------------------------
-            |
-            | Determine whether this month is on or
-            | after the agreed interest start date.
-            |
             */
 
             let interestStarted = false
@@ -602,8 +612,8 @@ export async function GET(
             } else {
                 /*
                 |--------------------------------------------------------------------------
-                | If no interestDate exists, interest can
-                | start based on the normal unpaid rule.
+                | If no interestDate exists, interest
+                | can start based on normal unpaid rule.
                 |--------------------------------------------------------------------------
                 */
 
@@ -614,17 +624,6 @@ export async function GET(
             |--------------------------------------------------------------------------
             | INTEREST UNPAID COUNTER
             |--------------------------------------------------------------------------
-            |
-            | This is completely independent from the
-            | old unpaid history.
-            |
-            | Example:
-            |
-            | January 2026 -> 1
-            | February 2026 -> 2
-            | March 2026 -> 3
-            | April 2026 -> 4 -> interest
-            |
             */
 
             if (
@@ -644,20 +643,12 @@ export async function GET(
             | INTEREST
             |--------------------------------------------------------------------------
             |
-            | Interest starts ONLY after 3 complete
-            | unpaid months from interestDate.
+            | Interest starts after 3 complete
+            | unpaid months.
             |
-            | Therefore:
+            | Interest is based ONLY on the
+            | previous totalAmountDue.
             |
-            | unpaid months 1 -> no interest
-            | unpaid months 2 -> no interest
-            | unpaid months 3 -> no interest
-            | unpaid months 4 -> interest
-            |
-            | Interest is calculated against the
-            | cumulative previous totalAmountDue PLUS
-            | the current month's unpaid amount.
-            |--------------------------------------------------------------------------
             */
 
             let interest = 0
@@ -666,26 +657,12 @@ export async function GET(
                 interestStarted &&
                 interestUnpaidMonths >= 3 &&
                 outstandingUnpaid > 0 &&
-                interestRate > 0
+                interestRate > 0 &&
+                previousTotalAmountDue > 0
 
             if (interestEligible) {
-                /*
-                |--------------------------------------------------------------------------
-                | INTEREST BASE
-                |--------------------------------------------------------------------------
-                |
-                | Previous totalAmountDue already contains
-                | previous interest.
-                |
-                | Add the current month's newly unpaid
-                | amount before calculating the new interest.
-                |
-                */
-
                 const interestBase = round(
-                    Math.max(
-                        previousTotalAmountDue
-                    )
+                    previousTotalAmountDue
                 )
 
                 interest = round(

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, asc } from "drizzle-orm";
 
 import { db } from "@/app/db";
 import { Client } from "@/app/db/schema";
@@ -9,7 +9,8 @@ export async function GET() {
         const clients = await db
             .select()
             .from(Client)
-            .where(isNull(Client.deletedAt));
+            .where(isNull(Client.deletedAt))
+            .orderBy(asc(Client.id));
 
         return NextResponse.json({
             success: true,

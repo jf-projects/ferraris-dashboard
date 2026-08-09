@@ -3,9 +3,25 @@ import { NextRequest, NextResponse } from "next/server";
 export function middleware(request: NextRequest) {
     const token = request.cookies.get("access_token");
 
-    const isLogin = request.nextUrl.pathname === "/login";
+    const { pathname } = request.nextUrl;
 
-    if (!token && !isLogin) {
+    const isLogin = pathname === "/login";
+    const isApi = pathname.startsWith("/api");
+    const isPublicApi = pathname === "/api/auth/login";
+
+    if (!token && !isLogin && !isPublicApi) {
+        if (isApi) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Unauthorized.",
+                },
+                {
+                    status: 401,
+                }
+            );
+        }
+
         return NextResponse.redirect(new URL("/login", request.url));
     }
 
@@ -18,6 +34,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        "/((?!api|_next/static|_next/image|favicon.ico|images).*)",
+        "/((?!_next/static|_next/image|favicon.ico|images).*)",
     ],
 };

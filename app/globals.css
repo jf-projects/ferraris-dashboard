@@ -132,3 +132,11 @@
     @apply font-sans;
   }
 }
+
+.rdt_TableRow:hover {
+  background-color: #16343B !important;
+}
+
+.rdt_TableRow:hover .rdt_TableCell {
+  color: #ffffff !important;
+}
