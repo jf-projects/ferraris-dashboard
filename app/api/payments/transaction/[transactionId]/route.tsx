@@ -12,7 +12,6 @@ export async function GET(
     try {
 
         const { transactionId } = await params
-        console.log(transactionId)
         const id = Number(transactionId)
 
         if (!Number.isInteger(id)) {

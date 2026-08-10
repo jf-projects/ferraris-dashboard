@@ -128,17 +128,17 @@ export function PaymentForm({
                     : "Payment added successfully."
             )
 
-            router.push(
-                `/lot-transactions/${payment?.lotTransactionId ??
-                lotTransactionId
-                }`
-            )
+            if (payment?.lotTransactionId) {
+                router.push("/payments")
+            } else {
+                router.push(
+                    `/lot-transactions`
+                )
+            }
 
             router.refresh()
 
         } catch (error) {
-
-            console.error(error)
 
             toast.error(
                 error instanceof Error

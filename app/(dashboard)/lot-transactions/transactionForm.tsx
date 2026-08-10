@@ -108,7 +108,6 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
         setLoading(true)
 
         try {
-
             let incrementValues: number[] = []
 
             if (form.autocompute) {
@@ -144,10 +143,16 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                 }
             }
 
-            if (!form.autocompute && incrementValues.length === 0) {
-                toast.error("Please enter at least one payment schedule.")
+            if (
+                !form.autocompute &&
+                incrementValues.length === 0
+            ) {
+                toast.error(
+                    "Please enter at least one payment schedule."
+                )
                 return
             }
+
             if (!required(form.clientId, "Client")) return
             if (!required(form.propertyUnit, "Property Unit")) return
             if (!required(form.type, "Type")) return
@@ -155,13 +160,11 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
             if (!required(form.unitLot, "Lot")) return
             if (!required(form.paymentTerms, "Payment Terms")) return
 
-
             const payload = {
                 ...form,
                 incrementValues: JSON.stringify(incrementValues),
             }
 
-            console.log('xx', payload)
             const res = await fetch(
                 transaction
                     ? `/api/lot-transactions/${transaction.id}`
@@ -169,66 +172,56 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                 {
                     method: transaction ? "PUT" : "POST",
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
                 }
             )
 
+            const data = await res.json()
 
             if (!res.ok) {
-                throw new Error("Failed saving transaction")
+                throw new Error(
+                    data.message || "Failed saving transaction."
+                )
             }
-
-
-            const result = await res.json()
-
 
             /*
             |--------------------------------------------------------------------------
             | CREATE DOWNPAYMENT PAYMENT
             |--------------------------------------------------------------------------
-            |
-            | Only create when creating a new transaction.
-            | Editing should not create another payment.
-            |
             */
 
             if (
                 !transaction &&
                 Number(form.downpayment) > 0 &&
-                result.data?.id
+                data.data?.id
             ) {
-
                 const paymentRes = await fetch(
                     "/api/payments",
                     {
                         method: "POST",
                         headers: {
-                            "Content-Type": "application/json"
+                            "Content-Type": "application/json",
                         },
                         body: JSON.stringify({
-                            lotTransactionId:
-                                result.data.id,
-                            amount:
-                                Number(form.downpayment),
-                            paymentDate:
-                                form.transactionDate,
-                            type:
-                                "downpayment"
-                        })
+                            lotTransactionId: data.data.id,
+                            amount: Number(form.downpayment),
+                            paymentDate: form.transactionDate,
+                            type: "downpayment",
+                        }),
                     }
                 )
 
+                const paymentData = await paymentRes.json()
 
                 if (!paymentRes.ok) {
                     throw new Error(
+                        paymentData.message ||
                         "Transaction saved but downpayment failed."
                     )
                 }
-
             }
-
 
             toast.success(
                 transaction
@@ -236,23 +229,20 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                     : "Transaction created."
             )
 
-
             router.push("/lot-transactions")
             router.refresh()
 
-
         } catch (err) {
-
             console.error(err)
 
             toast.error(
-                "Something went wrong."
+                err instanceof Error
+                    ? err.message
+                    : "Something went wrong."
             )
 
         } finally {
-
             setLoading(false)
-
         }
     }
 

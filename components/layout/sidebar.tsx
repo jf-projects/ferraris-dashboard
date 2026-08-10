@@ -11,9 +11,10 @@ import {
     UserRound,
     ChartColumn,
     // Bell,
-    Settings,
+    // Settings,
     LogOut,
 } from "lucide-react";
+import { useUser } from "@/app/hooks/useUser";
 
 type SidebarProps = {
     isOpen: boolean;
@@ -30,13 +31,14 @@ const mainMenu = [
 
 const managementMenu = [
     { title: "Users", href: "/users", icon: UserRound },
-    { title: "Reports", href: "/reports", icon: ChartColumn },
+    { title: "Reports", href: "/reports/payments", icon: ChartColumn },
     // { title: "Notifications", href: "/notifications", icon: Bell },
 ];
 
-const accountMenu = [
-    { title: "Settings", href: "/settings", icon: Settings },
-];
+// const accountMenu = [
+//     { title: "Settings", href: "/settings", icon: Settings },
+// ];
+
 
 export default function Sidebar({
     isOpen,
@@ -44,6 +46,13 @@ export default function Sidebar({
 }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
+
+    const { name, type, loading } = useUser()
+
+
+    if (loading) {
+        return null
+    }
 
     const handleLogout = async () => {
         try {
@@ -78,8 +87,8 @@ export default function Sidebar({
                     href={item.href}
                     onClick={onClose}
                     className={`flex h-12 items-center gap-3 rounded-xl px-4 transition-all duration-200 ${active
-                            ? "bg-[#02F5A1] text-[#07191E] shadow-lg shadow-[#02F5A1]/20"
-                            : "text-slate-400 hover:bg-[#10272D] hover:text-white"
+                        ? "bg-[#02F5A1] text-[#07191E] shadow-lg shadow-[#02F5A1]/20"
+                        : "text-slate-400 hover:bg-[#10272D] hover:text-white"
                         }`}
                 >
                     <Icon size={20} />
@@ -117,7 +126,7 @@ export default function Sidebar({
 
                     <div>
                         <h1 className="text-lg font-bold text-white">
-                            JF Admin
+                            Ferraris
                         </h1>
 
                         <p className="text-xs text-slate-500">
@@ -148,29 +157,29 @@ export default function Sidebar({
 
                     <div className="my-8 border-t border-[#02F5A1]/10" />
 
-                    <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    {/* <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
                         Account
-                    </p>
+                    </p> */}
 
-                    <div className="space-y-2">
+                    {/* <div className="space-y-2">
                         {renderMenu(accountMenu)}
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Footer */}
                 <div className="border-t border-[#02F5A1]/10 p-4">
                     <div className="mb-4 flex items-center gap-3 rounded-xl bg-[#10272D] p-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#02F5A1] font-semibold text-[#07191E]">
-                            JF
+                            F
                         </div>
 
                         <div>
                             <p className="text-sm font-semibold text-white">
-                                Jayson
+                                {name}
                             </p>
 
                             <p className="text-xs text-slate-500">
-                                Administrator
+                                {type}
                             </p>
                         </div>
                     </div>

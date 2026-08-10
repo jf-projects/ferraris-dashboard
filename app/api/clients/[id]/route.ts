@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/app/db";
 import { Client } from "@/app/db/schema";
-import { createAuditLog } from "../../logs/route";
+import { createAuditLog } from "@/lib/audit-log";
+import { supabase } from "@/lib/supabase";
 
 export async function GET(
     request: Request,
@@ -22,7 +24,6 @@ export async function GET(
                 )
             )
             .limit(1);
-        console.log(client);
 
         if (!client.length) {
             return NextResponse.json(
@@ -62,6 +63,9 @@ export async function PUT(
     try {
         const { id } = await params
         const clientId = Number(id)
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
 
         const body = await request.json()
 
@@ -108,68 +112,42 @@ export async function PUT(
 
         const oldClient = existingClient[0]
 
-        if (email) {
-            const duplicate = await db
-                .select()
-                .from(Client)
-                .where(
-                    and(
-                        eq(Client.email, email),
-                        isNull(Client.deletedAt)
-                    )
-                )
-                .limit(1)
-
-            if (
-                duplicate.length &&
-                duplicate[0].id !== clientId
-            ) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        message: "Email already exists.",
-                    },
-                    {
-                        status: 409,
-                    }
-                )
-            }
-        }
-
         const [updatedClient] = await db
             .update(Client)
             .set({
                 firstName,
-                middleName,
+                middleName: middleName || null,
                 lastName,
-                address,
-                gender,
-                civilStatus,
-                clientNumber,
-                clientLandline,
-                spouseFirstName,
-                spouseMiddleName,
-                spouseLastName,
-                bday,
-                image,
-                email,
-                clientId: clientIdValue,
+                address: address || null,
+                gender: gender || null,
+                civilStatus: civilStatus || null,
+                clientNumber: clientNumber || null,
+                clientLandline: clientLandline || null,
+                spouseFirstName: spouseFirstName || null,
+                spouseMiddleName: spouseMiddleName || null,
+                spouseLastName: spouseLastName || null,
+                bday: bday || null,
+                image: image || null,
+                email: email || null,
+                clientId: clientIdValue || null,
                 updatedAt: new Date(),
             })
-            .where(eq(Client.id, clientId))
+            .where(
+                eq(Client.id, clientId)
+            )
             .returning()
 
-        console.log("OLD:", oldClient)
-        console.log("NEW:", updatedClient)
+        if (user) {
+            await createAuditLog({
+                userId: user.id,
+                action: "UPDATE",
+                entity: "Client",
+                modelId: clientId,
+                oldValue: oldClient,
+                newValue: updatedClient,
+            })
+        }
 
-        await createAuditLog({
-            userId: "74cd4a4b-3830-49e5-b3dd-083ba22ab23c",
-            action: "UPDATE",
-            entity: "Client",
-            modelId: clientId,
-            oldValue: oldClient,
-            newValue: updatedClient,
-        })
 
         return NextResponse.json({
             success: true,
@@ -183,6 +161,7 @@ export async function PUT(
             {
                 success: false,
                 message: "Failed to update client.",
+                error: error
             },
             {
                 status: 500,
@@ -196,18 +175,35 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = await params;
+        const { id } = await params
+        const clientId = Number(id)
+
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
+
+        if (Number.isNaN(clientId)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    message: "Invalid client ID.",
+                },
+                {
+                    status: 400,
+                }
+            )
+        }
 
         const existingClient = await db
             .select()
             .from(Client)
             .where(
                 and(
-                    eq(Client.id, Number(id)),
+                    eq(Client.id, clientId),
                     isNull(Client.deletedAt)
                 )
             )
-            .limit(1);
+            .limit(1)
 
         if (!existingClient.length) {
             return NextResponse.json(
@@ -218,7 +214,7 @@ export async function DELETE(
                 {
                     status: 404,
                 }
-            );
+            )
         }
 
         await db
@@ -227,19 +223,31 @@ export async function DELETE(
                 deletedAt: new Date(),
                 updatedAt: new Date(),
             })
-            .where(eq(Client.id, Number(id)));
+            .where(eq(Client.id, clientId))
+
+        if (user) {
+            await createAuditLog({
+                userId: user.id,
+                action: "DELETE",
+                entity: "Client",
+                modelId: existingClient[0].id,
+                oldValue: existingClient[0],
+                newValue: null,
+            })
+        }
 
         return NextResponse.json({
             success: true,
             message: "Client deleted successfully.",
-        });
-    } catch (error) {
+        })
+    } catch (error: any) {
         console.error(error);
 
         return NextResponse.json(
             {
                 success: false,
-                message: "Failed to delete client.",
+                message: error.message,
+                cause: error.cause,
             },
             {
                 status: 500,

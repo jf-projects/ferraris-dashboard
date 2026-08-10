@@ -40,9 +40,17 @@ export default function LoginForm() {
                 return;
             }
 
+
             await supabase.auth.setSession({
-                access_token: data.access_token,
-                refresh_token: data.refresh_token,
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+            });
+            // Save your database user information to the Supabase session
+            await supabase.auth.updateUser({
+                data: {
+                    name: data.user.user_metadata.name,
+                    type: data.user.user_metadata.type,
+                },
             });
 
             router.replace("/dashboard");

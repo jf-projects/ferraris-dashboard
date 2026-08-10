@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { toast } from "sonner"
 
 interface ClientFormProps {
     client?: any
@@ -41,18 +42,26 @@ export function ClientForm({ client }: ClientFormProps) {
                 middleName: client.middleName ?? "",
                 lastName: client.lastName ?? "",
                 address: client.address ?? "",
+
                 gender: client.gender
-                    ? client.gender.charAt(0).toUpperCase() + client.gender.slice(1).toLowerCase()
+                    ? client.gender.charAt(0).toUpperCase() +
+                    client.gender.slice(1).toLowerCase()
                     : "",
-                civilStatus: client.gender
-                    ? client.civilStatus.charAt(0).toUpperCase() + client.civilStatus.slice(1).toLowerCase()
+
+                civilStatus: client.civilStatus
+                    ? client.civilStatus.charAt(0).toUpperCase() +
+                    client.civilStatus.slice(1).toLowerCase()
                     : "",
+
                 clientNumber: client.clientNumber ?? "",
                 clientLandline: client.clientLandline ?? "",
+
                 spouseFirstName: client.spouseFirstName ?? "",
                 spouseMiddleName: client.spouseMiddleName ?? "",
                 spouseLastName: client.spouseLastName ?? "",
+
                 bday: client.bday?.substring(0, 10) ?? "",
+
                 email: client.email ?? "",
                 clientId: client.clientId ?? "",
                 image: client.image ?? "",
@@ -107,13 +116,10 @@ export function ClientForm({ client }: ClientFormProps) {
     }
 
     async function handleSubmit(e: React.FormEvent) {
-
         e.preventDefault()
         setLoading(true)
-        console.log(form)
 
         try {
-
             const res = await fetch(
                 client
                     ? `/api/clients/${client.id}`
@@ -121,17 +127,35 @@ export function ClientForm({ client }: ClientFormProps) {
                 {
                     method: client ? "PUT" : "POST",
                     headers: {
-                        "Content-Type": "application/json"
+                        "Content-Type": "application/json",
                     },
-                    body: JSON.stringify(form)
-                })
-            if (!res.ok) throw new Error("Failed")
+                    body: JSON.stringify(form),
+                }
+            )
+
+            const data = await res.json()
+
+            if (!res.ok) {
+                throw new Error(
+                    data.message || "Failed to save client."
+                )
+            }
+
+            toast.success(
+                client
+                    ? "Client updated successfully."
+                    : "Client created successfully."
+            )
 
             router.push("/clients")
             router.refresh()
 
-        } catch (err) {
-            console.error(err)
+        } catch (error) {
+            toast.error(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to save client."
+            )
         } finally {
             setLoading(false)
         }

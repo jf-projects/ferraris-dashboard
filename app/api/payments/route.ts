@@ -11,46 +11,42 @@ export async function GET() {
 
         const payments = await db
             .select({
-                payment: Payment,
-                transaction: LotTransaction,
-                client: Client,
+                id: Payment.id,
+                lotTransactionId: Payment.lotTransactionId,
+                amount: Payment.amount,
+                bank: Payment.bank,
+                paymentDate: Payment.paymentDate,
+                remarks: Payment.remarks,
+                createdAt: Payment.createdAt,
+                updatedAt: Payment.updatedAt,
+                deletedAt: Payment.deletedAt,
+
+                client: {
+                    id: Client.id,
+                    firstName: Client.firstName,
+                    middleName: Client.middleName,
+                    lastName: Client.lastName,
+                },
             })
             .from(Payment)
             .leftJoin(
                 LotTransaction,
-                eq(
-                    Payment.lotTransactionId,
-                    LotTransaction.id
-                )
+                eq(Payment.lotTransactionId, LotTransaction.id)
             )
             .leftJoin(
                 Client,
-                eq(
-                    LotTransaction.clientId,
-                    Client.id
-                )
+                eq(LotTransaction.clientId, Client.id)
             )
             .where(
                 isNull(Payment.deletedAt)
             )
-            .orderBy(asc(Payment.id));
-
-
-        const data = payments.map((row) => ({
-            ...row.payment,
-            client: row.client
-                ? {
-                    id: row.client.id,
-                    firstName: row.client.firstName,
-                    middleName: row.client.middleName,
-                    lastName: row.client.lastName,
-                }
-                : null,
-        }))
+            .orderBy(
+                asc(Payment.id)
+            )
 
         return NextResponse.json({
             success: true,
-            data,
+            data: payments,
         })
 
     } catch (error) {

@@ -4,6 +4,8 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/app/db";
 import { Payment, LotTransaction } from "@/app/db/schema";
+import { supabase } from "@/lib/supabase";
+import { createAuditLog } from "@/lib/audit-log";
 
 export async function GET(
     request: Request,
@@ -74,6 +76,9 @@ export async function PUT(
     try {
         const { id } = await params;
         const paymentId = Number(id);
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
 
         if (Number.isNaN(paymentId)) {
             return NextResponse.json(
@@ -156,6 +161,17 @@ export async function PUT(
             .where(eq(Payment.id, paymentId))
             .returning();
 
+        if (user) {
+            await createAuditLog({
+                userId: user.id,
+                action: "UPDATE",
+                entity: "Payments",
+                modelId: existing[0].id,
+                oldValue: existing[0],
+                newValue: updated[0],
+            })
+        }
+
         return NextResponse.json({
             success: true,
             message: "Payment updated successfully.",
@@ -182,8 +198,12 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const { id } = await params;
-        const paymentId = Number(id);
+        const { id } = await params
+        const paymentId = Number(id)
+
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
 
         if (Number.isNaN(paymentId)) {
             return NextResponse.json(
@@ -194,7 +214,7 @@ export async function DELETE(
                 {
                     status: 400,
                 }
-            );
+            )
         }
 
         const existing = await db
@@ -206,7 +226,7 @@ export async function DELETE(
                     isNull(Payment.deletedAt)
                 )
             )
-            .limit(1);
+            .limit(1)
 
         if (!existing.length) {
             return NextResponse.json(
@@ -217,7 +237,7 @@ export async function DELETE(
                 {
                     status: 404,
                 }
-            );
+            )
         }
 
         await db
@@ -226,14 +246,25 @@ export async function DELETE(
                 deletedAt: new Date(),
                 updatedAt: new Date(),
             })
-            .where(eq(Payment.id, paymentId));
+            .where(eq(Payment.id, paymentId))
+
+        if (user) {
+            await createAuditLog({
+                userId: user.id,
+                action: "DELETE",
+                entity: "Payments",
+                modelId: existing[0].id,
+                oldValue: existing[0],
+                newValue: null,
+            })
+        }
 
         return NextResponse.json({
             success: true,
             message: "Payment deleted successfully.",
-        });
+        })
     } catch (error: any) {
-        console.error(error);
+        console.error(error)
 
         return NextResponse.json(
             {
@@ -244,6 +275,6 @@ export async function DELETE(
             {
                 status: 500,
             }
-        );
+        )
     }
 }

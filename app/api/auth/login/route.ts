@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { db } from "@/app/db";
+import { User } from "@/app/db/schema";
+import { eq } from "drizzle-orm";
 
 export async function POST(request: Request) {
     const { email, password } = await request.json();
@@ -21,9 +24,28 @@ export async function POST(request: Request) {
         );
     }
 
+    // Get user details from your User table
+    const [user] = await db
+        .select({
+            id: User.id,
+            name: User.name,
+            email: User.email,
+            type: User.type,
+        })
+        .from(User)
+        .where(eq(User.id, data.user.id))
+        .limit(1)
+
     const response = NextResponse.json({
         success: true,
-        user: data.user,
+        user: {
+            id: data.user.id,
+            email: data.user.email,
+            user_metadata: {
+                name: user.name,
+                type: user.type,
+            },
+        },
         session: {
             access_token: data.session.access_token,
             refresh_token: data.session.refresh_token,

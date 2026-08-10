@@ -122,8 +122,7 @@ export function UserForm({ user }: UserFormProps) {
 
             if (!response.ok || !data.success) {
                 throw new Error(
-                    data.message ||
-                    "Failed to save user."
+                    data.message || "Failed to save user."
                 )
             }
 
