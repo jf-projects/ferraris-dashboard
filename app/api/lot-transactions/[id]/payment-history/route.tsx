@@ -55,12 +55,6 @@ export async function GET(
             )
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | GET TRANSACTION
-        |--------------------------------------------------------------------------
-        */
-
         const [transaction] = await db
             .select()
             .from(LotTransaction)
@@ -82,12 +76,6 @@ export async function GET(
             )
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | CASH
-        |--------------------------------------------------------------------------
-        */
-
         if (
             !transaction.paymentTerms ||
             transaction.paymentTerms.toLowerCase() === "cash"
@@ -108,12 +96,6 @@ export async function GET(
             })
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | PAYMENT TERMS
-        |--------------------------------------------------------------------------
-        */
-
         const paymentYears = Number(
             transaction.paymentTerms
         )
@@ -132,12 +114,6 @@ export async function GET(
         }
 
         const totalMonths = paymentYears * 12
-
-        /*
-        |--------------------------------------------------------------------------
-        | INCREMENT VALUES
-        |--------------------------------------------------------------------------
-        */
 
         let incrementValues: number[] = []
 
@@ -161,12 +137,6 @@ export async function GET(
             )
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | AMOUNTS
-        |--------------------------------------------------------------------------
-        */
-
         const totalAmount = Number(
             transaction.propertyTotalAmount || 0
         )
@@ -180,38 +150,9 @@ export async function GET(
             totalAmount - downpayment
         )
 
-        /*
-        |--------------------------------------------------------------------------
-        | DEFAULT MONTHLY PAYMENT
-        |--------------------------------------------------------------------------
-        |
-        | If there are no increment values:
-        |
-        | (total amount - downpayment) / total months
-        |
-        */
-
         const defaultMonthlyDue = round(
             financedAmount / totalMonths
         )
-
-        /*
-        |--------------------------------------------------------------------------
-        | INTEREST
-        |--------------------------------------------------------------------------
-        |
-        | interestDate is the AGREED START DATE.
-        |
-        | Example:
-        |
-        | interestDate = December 31, 2025
-        |
-        | January 2026 = unpaid month 1
-        | February 2026 = unpaid month 2
-        | March 2026 = unpaid month 3
-        | April 2026 = unpaid month 4 -> interest
-        |
-        */
 
         const interestRate = Number(
             transaction.interest || 0
@@ -220,12 +161,6 @@ export async function GET(
         const interestDate = parseDate(
             transaction.interestDate
         )
-
-        /*
-        |--------------------------------------------------------------------------
-        | GET ACTIVE PAYMENTS
-        |--------------------------------------------------------------------------
-        */
 
         const payments = await db
             .select()
@@ -244,45 +179,29 @@ export async function GET(
                 asc(Payment.id)
             )
 
-        /*
-        |--------------------------------------------------------------------------
-        | START DATE
-        |--------------------------------------------------------------------------
-        */
-
         const transactionDate = parseDate(
             transaction.transactionDate
         )
 
-        const firstPaymentDate =
-            payments.length
-                ? parseDate(
-                    payments[0].paymentDate
-                )
-                : null
-
-        const possibleDates = [
-            transactionDate,
-            firstPaymentDate
-        ].filter(Boolean) as Date[]
-
-        if (!possibleDates.length) {
+        if (!transactionDate) {
             return NextResponse.json(
                 {
                     success: false,
-                    message:
-                        "Transaction date or payment date is required."
+                    message: "Transaction date is required."
                 },
                 { status: 400 }
             )
         }
 
-        const startDate = new Date(
-            Math.min(
-                ...possibleDates.map(
-                    date => date.getTime()
-                )
-            )
+        /*
+        |--------------------------------------------------------------------------
+        | PAYMENT SCHEDULE STARTS ONE MONTH AFTER TRANSACTION DATE
+        |--------------------------------------------------------------------------
+        */
+
+        const startDate = addMonths(
+            transactionDate,
+            1
         )
 
         startDate.setHours(0, 0, 0, 0)
@@ -360,52 +279,103 @@ export async function GET(
         let totalInterest = 0
         let principalPaid = 0
 
-        /*
-        |--------------------------------------------------------------------------
-        | GENERAL UNPAID MONTH COUNTER
-        |--------------------------------------------------------------------------
-        */
-
         let consecutiveUnpaid = 0
-
-        /*
-        |--------------------------------------------------------------------------
-        | INTEREST UNPAID MONTH COUNTER
-        |--------------------------------------------------------------------------
-        */
-
         let interestUnpaidMonths = 0
-
-        /*
-        |--------------------------------------------------------------------------
-        | OUTSTANDING PRINCIPAL DUE
-        |--------------------------------------------------------------------------
-        */
-
         let outstandingUnpaid = 0
-
-        /*
-        |--------------------------------------------------------------------------
-        | PAYMENT CREDIT
-        |--------------------------------------------------------------------------
-        */
-
         let credit = 0
-
-        /*
-        |--------------------------------------------------------------------------
-        | PREVIOUS TOTAL AMOUNT DUE
-        |--------------------------------------------------------------------------
-        |
-        | Used as the base for cumulative interest.
-        |
-        */
-
         let previousTotalAmountDue = 0
 
         /*
         |--------------------------------------------------------------------------
-        | GENERATE HISTORY
+        | DOWNPAYMENT FIRST
+        |--------------------------------------------------------------------------
+        */
+
+        if (downpayment > 0) {
+            const downpaymentKey =
+                getMonthKey(transactionDate)
+
+            const actualDownpayment =
+                paymentsByMonth.get(
+                    downpaymentKey
+                ) || 0
+
+            const appliedDownpayment =
+                Math.min(
+                    actualDownpayment,
+                    downpayment
+                )
+
+            const unpaidDownpayment =
+                round(
+                    Math.max(
+                        0,
+                        downpayment -
+                        appliedDownpayment
+                    )
+                )
+
+            history.push({
+                month: 0,
+
+                monthYear:
+                    getMonthYear(
+                        transactionDate
+                    ),
+
+                dueDate:
+                    transactionDate.toISOString(),
+
+                dueAmount:
+                    round(downpayment),
+
+                actualPayment:
+                    round(actualDownpayment),
+
+                amountPaid:
+                    round(appliedDownpayment),
+
+                unpaidAmount:
+                    unpaidDownpayment,
+
+                consecutiveUnpaid: 0,
+
+                interestUnpaidMonths: 0,
+
+                interest: 0,
+
+                balance:
+                    round(financedAmount),
+
+                totalAmountDue:
+                    unpaidDownpayment,
+
+                type: "downpayment"
+            })
+
+            /*
+            |--------------------------------------------------------------------------
+            | EXCESS PAYMENT BECOMES CREDIT
+            |--------------------------------------------------------------------------
+            */
+
+            credit = round(
+                Math.max(
+                    0,
+                    actualDownpayment -
+                    appliedDownpayment
+                )
+            )
+
+            totalPaid = round(
+                totalPaid +
+                appliedDownpayment
+            )
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | MONTHLY HISTORY
         |--------------------------------------------------------------------------
         */
 
@@ -416,33 +386,28 @@ export async function GET(
         ) {
             const month = index + 1
 
-            const currentDate = addMonths(
-                startDate,
-                index
-            )
+            const currentDate =
+                addMonths(
+                    startDate,
+                    index
+                )
 
             const monthKey =
-                getMonthKey(currentDate)
+                getMonthKey(
+                    currentDate
+                )
 
             /*
             |--------------------------------------------------------------------------
             | MONTHLY DUE
             |--------------------------------------------------------------------------
-            |
-            | If incrementValues exist:
-            |     Use the configured increment schedule.
-            |
-            | If no incrementValues exist:
-            |     Use financedAmount / totalMonths.
-            |
             */
 
             let dueAmount = 0
 
             if (incrementValues.length > 0) {
-                const block = Math.floor(
-                    index / 60
-                )
+                const block =
+                    Math.floor(index / 60)
 
                 dueAmount = round(
                     Number(
@@ -455,7 +420,8 @@ export async function GET(
                     )
                 )
             } else {
-                dueAmount = defaultMonthlyDue
+                dueAmount =
+                    defaultMonthlyDue
             }
 
             /*
@@ -475,33 +441,11 @@ export async function GET(
             |--------------------------------------------------------------------------
             */
 
-            let availablePayment = round(
-                credit +
-                actualPayment
-            )
-
-            /*
-            |--------------------------------------------------------------------------
-            | FIRST PAYMENT / DOWNPAYMENT
-            |--------------------------------------------------------------------------
-            */
-
-            if (
-                month === 1 &&
-                downpayment > 0 &&
-                availablePayment > 0
-            ) {
-                const downpaymentApplied =
-                    Math.min(
-                        availablePayment,
-                        downpayment
-                    )
-
-                availablePayment = round(
-                    availablePayment -
-                    downpaymentApplied
+            const availablePayment =
+                round(
+                    credit +
+                    actualPayment
                 )
-            }
 
             /*
             |--------------------------------------------------------------------------
@@ -509,10 +453,11 @@ export async function GET(
             |--------------------------------------------------------------------------
             */
 
-            outstandingUnpaid = round(
-                outstandingUnpaid +
-                dueAmount
-            )
+            outstandingUnpaid =
+                round(
+                    outstandingUnpaid +
+                    dueAmount
+                )
 
             /*
             |--------------------------------------------------------------------------
@@ -520,15 +465,17 @@ export async function GET(
             |--------------------------------------------------------------------------
             */
 
-            const paymentApplied = Math.min(
-                availablePayment,
-                outstandingUnpaid
-            )
+            const paymentApplied =
+                Math.min(
+                    availablePayment,
+                    outstandingUnpaid
+                )
 
-            outstandingUnpaid = round(
-                outstandingUnpaid -
-                paymentApplied
-            )
+            outstandingUnpaid =
+                round(
+                    outstandingUnpaid -
+                    paymentApplied
+                )
 
             /*
             |--------------------------------------------------------------------------
@@ -546,22 +493,24 @@ export async function GET(
 
             /*
             |--------------------------------------------------------------------------
-            | MONTHLY AMOUNT PAID
+            | AMOUNT PAID
             |--------------------------------------------------------------------------
             */
 
-            const amountPaid = round(
-                paymentApplied
-            )
+            const amountPaid =
+                round(
+                    paymentApplied
+                )
 
             /*
             |--------------------------------------------------------------------------
-            | GENERAL CONSECUTIVE UNPAID
+            | CONSECUTIVE UNPAID
             |--------------------------------------------------------------------------
             */
 
             if (
-                amountPaid < dueAmount
+                amountPaid <
+                dueAmount
             ) {
                 consecutiveUnpaid++
             } else {
@@ -595,10 +544,7 @@ export async function GET(
                         currentDate
                     )
 
-                currentInterestMonth.setDate(
-                    1
-                )
-
+                currentInterestMonth.setDate(1)
                 currentInterestMonth.setHours(
                     0,
                     0,
@@ -610,13 +556,6 @@ export async function GET(
                     currentInterestMonth >=
                     interestMonth
             } else {
-                /*
-                |--------------------------------------------------------------------------
-                | If no interestDate exists, interest
-                | can start based on normal unpaid rule.
-                |--------------------------------------------------------------------------
-                */
-
                 interestStarted = true
             }
 
@@ -642,13 +581,6 @@ export async function GET(
             |--------------------------------------------------------------------------
             | INTEREST
             |--------------------------------------------------------------------------
-            |
-            | Interest starts after 3 complete
-            | unpaid months.
-            |
-            | Interest is based ONLY on the
-            | previous totalAmountDue.
-            |
             */
 
             let interest = 0
@@ -661,9 +593,10 @@ export async function GET(
                 previousTotalAmountDue > 0
 
             if (interestEligible) {
-                const interestBase = round(
-                    previousTotalAmountDue
-                )
+                const interestBase =
+                    round(
+                        previousTotalAmountDue
+                    )
 
                 interest = round(
                     interestBase *
@@ -677,16 +610,11 @@ export async function GET(
             |--------------------------------------------------------------------------
             */
 
-            const totalAmountDue = round(
-                outstandingUnpaid +
-                interest
-            )
-
-            /*
-            |--------------------------------------------------------------------------
-            | UPDATE PREVIOUS TOTAL DUE
-            |--------------------------------------------------------------------------
-            */
+            const totalAmountDue =
+                round(
+                    outstandingUnpaid +
+                    interest
+                )
 
             previousTotalAmountDue =
                 totalAmountDue
@@ -697,18 +625,20 @@ export async function GET(
             |--------------------------------------------------------------------------
             */
 
-            principalPaid = round(
-                principalPaid +
-                amountPaid
-            )
-
-            const balance = round(
-                Math.max(
-                    0,
-                    financedAmount -
-                    principalPaid
+            principalPaid =
+                round(
+                    principalPaid +
+                    amountPaid
                 )
-            )
+
+            const balance =
+                round(
+                    Math.max(
+                        0,
+                        financedAmount -
+                        principalPaid
+                    )
+                )
 
             /*
             |--------------------------------------------------------------------------
@@ -716,19 +646,21 @@ export async function GET(
             |--------------------------------------------------------------------------
             */
 
-            totalPaid = round(
-                totalPaid +
-                amountPaid
-            )
+            totalPaid =
+                round(
+                    totalPaid +
+                    amountPaid
+                )
 
-            totalInterest = round(
-                totalInterest +
-                interest
-            )
+            totalInterest =
+                round(
+                    totalInterest +
+                    interest
+                )
 
             /*
             |--------------------------------------------------------------------------
-            | HISTORY
+            | HISTORY ITEM
             |--------------------------------------------------------------------------
             */
 
@@ -763,7 +695,9 @@ export async function GET(
 
                 balance,
 
-                totalAmountDue
+                totalAmountDue,
+
+                type: "installment"
             })
         }
 
@@ -773,9 +707,10 @@ export async function GET(
         |--------------------------------------------------------------------------
         */
 
-        const totalUnpaid = round(
-            outstandingUnpaid
-        )
+        const totalUnpaid =
+            round(
+                outstandingUnpaid
+            )
 
         const balance =
             history.length
@@ -784,13 +719,14 @@ export async function GET(
                 ].balance
                 : financedAmount
 
-        const totalAmountDue = round(
+        const totalAmountDue =
             history.length
-                ? history[
-                    history.length - 1
-                ].totalAmountDue
+                ? round(
+                    history[
+                        history.length - 1
+                    ].totalAmountDue
+                )
                 : 0
-        )
 
         /*
         |--------------------------------------------------------------------------
@@ -803,6 +739,9 @@ export async function GET(
 
             data: {
                 transactionId,
+
+                transactionDate:
+                    transactionDate.toISOString(),
 
                 startDate:
                     startDate.toISOString(),
@@ -845,6 +784,7 @@ export async function GET(
                 history
             }
         })
+
     } catch (error) {
         console.error(
             "Payment history error:",
