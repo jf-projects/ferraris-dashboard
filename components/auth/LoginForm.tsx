@@ -101,7 +101,7 @@ export default function LoginForm() {
                         </div>
                     )}
 
-                    <div className="flex items-center justify-between">
+                    {/* <div className="flex items-center justify-between">
                         <label className="flex items-center gap-2 text-sm text-slate-300">
                             <input
                                 type="checkbox"
@@ -116,7 +116,7 @@ export default function LoginForm() {
                         >
                             Forgot Password?
                         </button>
-                    </div>
+                    </div> */}
 
                     <button
                         type="submit"
