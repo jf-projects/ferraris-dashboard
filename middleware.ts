@@ -20,7 +20,9 @@ export function middleware(request: NextRequest) {
 
     const isLogin = pathname === "/login";
     const isApi = pathname.startsWith("/api");
-    const isPublicApi = pathname === "/api/auth/login";
+    const isPublicApi =
+        pathname === "/api/auth/login" ||
+        pathname === "/api/public/client/"
 
     // Authentication
     if (!token && !isLogin && !isPublicApi) {
