@@ -87,24 +87,14 @@ export default function PaymentsPage() {
                 </p>
             </div>
 
-            {loading ? (
-
-                <div className="rounded-2xl border border-[#1f3a40] bg-[#10272D] p-10 text-center text-slate-400">
-                    Loading payments...
-                </div>
-
-            ) : (
-
-                <DataTable
-                    columns={columns(handleDelete)}
-                    data={payments}
-                    searchColumn="clientName"
-                    searchPlaceholder="Search payments..."
-                    emptyMessage="No payments found"
-                    exportFileName="Payments.xlsx"
-                />
-
-            )}
+            <DataTable
+                columns={columns(handleDelete)}
+                data={payments}
+                searchColumn="clientName"
+                searchPlaceholder="Search payments..."
+                emptyMessage="No payments found"
+                exportFileName="Payments.xlsx"
+            />
 
         </div>
     )

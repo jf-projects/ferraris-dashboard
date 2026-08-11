@@ -4,7 +4,7 @@
 import { ColumnDef } from "@tanstack/react-table"
 import Link from "next/link"
 import {
-    Eye,
+    // Eye,
     Pencil,
     Trash2,
 } from "lucide-react"
@@ -79,14 +79,14 @@ export const columns = (
 
                 return (
                     <div className="flex items-center gap-1">
-
+{/* 
                         <Link
                             href={`/clients/${client.id}`}
                             title="View Client"
                             className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#07191E] text-white transition hover:bg-[#16343B]"
                         >
                             <Eye className="h-4 w-4" />
-                        </Link>
+                        </Link> */}
 
                         <Link
                             href={`/clients/${client.id}/edit`}

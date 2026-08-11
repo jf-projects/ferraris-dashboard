@@ -71,7 +71,7 @@ export default function CollectionsOverview() {
                 </h2>
 
                 <p className="mt-1 text-xs text-slate-500">
-                    Total collections this year
+                    Total collections this past 12 months
                 </p>
             </div>
 

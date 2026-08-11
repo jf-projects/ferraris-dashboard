@@ -2,14 +2,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ClientTable } from "./client-table"
+// import { ClientTable } from "./client-table"
+import { DataTable } from "@/components/table"
 import { columns } from "./columns"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
 export default function ClientsPage() {
-  const router = useRouter()
 
   const [clients, setClients] = useState<any[]>([])
 
@@ -60,7 +59,8 @@ export default function ClientsPage() {
   }, [])
 
   return (
-    <div>
+    <div className="space-y-6">
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">
@@ -80,9 +80,13 @@ export default function ClientsPage() {
         </Link>
       </div>
 
-      <ClientTable
+      <DataTable
         columns={columns(handleDelete)}
         data={clients}
+        searchColumn="fullName"
+        searchPlaceholder="Search Client..."
+        emptyMessage="No Clients found"
+        exportFileName="Clients.xlsx"
       />
     </div>
   )
