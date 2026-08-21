@@ -19,10 +19,10 @@ async function getTransaction(id: number) {
             },
         }
     )
+    console.log(response)
 
     const data = await response.json()
 
-    console.log(data)
 
     return data.data
 }

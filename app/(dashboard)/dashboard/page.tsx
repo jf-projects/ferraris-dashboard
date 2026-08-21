@@ -11,7 +11,7 @@ export default function DashboardPage() {
       </h2>
 
       <p className="mt-2 text-slate-400">
-        Welcome back, Jayson.
+        Welcome back.
       </p>
 
       <div className="space-y-6">

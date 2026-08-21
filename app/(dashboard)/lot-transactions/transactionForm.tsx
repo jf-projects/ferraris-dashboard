@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client"
 
@@ -9,8 +10,9 @@ interface TransactionFormProps {
     transaction?: any
 }
 
-export function TransactionForm({ transaction }: TransactionFormProps) {
-
+export function TransactionForm({
+    transaction,
+}: TransactionFormProps) {
     const router = useRouter()
 
     const [loading, setLoading] = useState(false)
@@ -37,6 +39,12 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
         interestDate: "",
     })
 
+    /*
+    |--------------------------------------------------------------------------
+    | Auto Computed Payment Schedule
+    |--------------------------------------------------------------------------
+    */
+
     const incrementValues =
         form.autocompute &&
             Number(form.paymentTerms) >= 5
@@ -46,135 +54,514 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                 Number(form.paymentTerms),
                 Number(form.incrementAmount)
             )
-            : [];
+            : []
 
+    /*
+    |--------------------------------------------------------------------------
+    | Fetch Clients
+    |--------------------------------------------------------------------------
+    */
 
     async function fetchClients() {
+        try {
+            const res = await fetch("/api/clients")
 
-        const res = await fetch("/api/clients")
-        const data = await res.json()
+            if (!res.ok) {
+                throw new Error("Failed to load clients.")
+            }
 
-        setClients(data.data)
+            const data = await res.json()
+
+            setClients(data.data ?? [])
+        } catch (error) {
+            console.error(error)
+
+            toast.error("Failed to load clients.")
+        }
     }
 
     useEffect(() => {
-        const loadClients = () => {
-            fetchClients()
-        }
-        loadClients();
+        fetchClients()
     }, [])
 
+    /*
+    |--------------------------------------------------------------------------
+    | Load Transaction For Edit
+    |--------------------------------------------------------------------------
+    */
+
     useEffect(() => {
-        const loadData = () => {
-            setForm({
-                clientId: String(transaction.clientId ?? ""),
-                propertyUnit: transaction.propertyUnit ?? "",
-                totalPropertySize: String(transaction.totalPropertySize ?? ""),
-                type: transaction.type ?? "",
-                unitBlock: transaction.unitBlock ?? "",
-                unitLot: transaction.unitLot ?? "",
-                propertyUnitAddress: transaction.propertyUnitAddress ?? "",
-                downpayment: String(transaction.downpayment ?? ""),
-                paymentTerms: String(transaction.paymentTerms ?? ""),
-                incrementValues: transaction.incrementValues ?? "",
-                interest: String(transaction.interest ?? ""),
-                sqm: String(transaction.sqm ?? ""),
-                incrementAmount: Number(transaction.incrementAmount ?? ""),
-                transactionDate: transaction.transactionDate?.substring(0, 10) ?? "",
-                autocompute: transaction.autocompute ? 1 : 0,
-                propertyTotalAmount: String(transaction.propertyTotalAmount ?? ""),
-                dueDate: transaction.dueDate?.substring(0, 10) ?? "",
-                interestDate: transaction.interestDate?.substring(0, 10) ?? "",
-            })
+        if (!transaction) {
+            return
         }
 
-        if (!transaction) return
-        loadData();
+        setForm({
+            clientId:
+                transaction.clientId != null
+                    ? String(transaction.clientId)
+                    : "",
+
+            propertyUnit:
+                transaction.propertyUnit ?? "",
+
+            totalPropertySize:
+                transaction.totalPropertySize != null
+                    ? String(transaction.totalPropertySize)
+                    : "",
+
+            type:
+                transaction.type ?? "",
+
+            unitBlock:
+                transaction.unitBlock != null
+                    ? String(transaction.unitBlock)
+                    : "",
+
+            unitLot:
+                transaction.unitLot != null
+                    ? String(transaction.unitLot)
+                    : "",
+
+            propertyUnitAddress:
+                transaction.propertyUnitAddress ?? "",
+
+            downpayment:
+                transaction.downpayment != null
+                    ? String(transaction.downpayment)
+                    : "",
+
+            paymentTerms:
+                transaction.paymentTerms != null
+                    ? String(transaction.paymentTerms)
+                    : "",
+
+            incrementValues:
+                typeof transaction.incrementValues === "string"
+                    ? transaction.incrementValues
+                    : JSON.stringify(
+                        transaction.incrementValues ?? []
+                    ),
+
+            interest:
+                transaction.interest != null
+                    ? String(transaction.interest)
+                    : "",
+
+            sqm:
+                transaction.sqm != null
+                    ? String(transaction.sqm)
+                    : "",
+
+            incrementAmount:
+                transaction.incrementAmount != null
+                    ? Number(transaction.incrementAmount)
+                    : 0,
+
+            transactionDate:
+                transaction.transactionDate
+                    ? String(transaction.transactionDate).substring(
+                        0,
+                        10
+                    )
+                    : "",
+
+            autocompute:
+                transaction.autocompute ? 1 : 0,
+
+            propertyTotalAmount:
+                transaction.propertyTotalAmount != null
+                    ? String(transaction.propertyTotalAmount)
+                    : "",
+
+            dueDate:
+                transaction.dueDate
+                    ? String(transaction.dueDate).substring(0, 10)
+                    : "",
+
+            interestDate:
+                transaction.interestDate
+                    ? String(transaction.interestDate).substring(
+                        0,
+                        10
+                    )
+                    : "",
+        })
     }, [transaction])
 
+    /*
+    |--------------------------------------------------------------------------
+    | Handle Input Changes
+    |--------------------------------------------------------------------------
+    */
+
     function handleChange(e: any) {
+        const {
+            name,
+            value,
+            type,
+            checked,
+        } = e.target
 
-        const { name, value, type, checked } = e.target
-
-        setForm(prev => ({
+        setForm((prev) => ({
             ...prev,
-            [name]: type === "checkbox" ? checked : value
+            [name]:
+                type === "checkbox"
+                    ? checked
+                    : value,
         }))
     }
 
-    async function handleSubmit(e: React.FormEvent) {
+    /*
+    |--------------------------------------------------------------------------
+    | Handle Submit
+    |--------------------------------------------------------------------------
+    */
+
+    async function handleSubmit(
+        e: React.FormEvent
+    ) {
         e.preventDefault()
+
+        if (loading) {
+            return
+        }
 
         setLoading(true)
 
         try {
-            let incrementValues: number[] = []
+            /*
+            |--------------------------------------------------------------------------
+            | Payment Schedule
+            |--------------------------------------------------------------------------
+            */
+
+            let paymentSchedule: number[] = []
 
             if (form.autocompute) {
-                const calculated = calculateIncrementValues(
-                    Number(form.propertyTotalAmount),
-                    Number(form.downpayment),
-                    Number(form.paymentTerms),
-                    Number(form.incrementAmount)
-                )
+                /*
+                | Cash does not need a computed schedule.
+                */
 
-                if (!calculated) {
-                    toast.error(
-                        "Increment amount is too high for the selected payment terms."
-                    )
-                    return
+                if (form.paymentTerms === "cash") {
+                    paymentSchedule = []
+                } else {
+                    const calculated =
+                        calculateIncrementValues(
+                            Number(form.propertyTotalAmount),
+                            Number(form.downpayment),
+                            Number(form.paymentTerms),
+                            Number(form.incrementAmount)
+                        )
+
+                    if (!calculated) {
+                        toast.error(
+                            "Increment amount is too high for the selected payment terms."
+                        )
+
+                        setLoading(false)
+
+                        return
+                    }
+
+                    paymentSchedule = calculated
                 }
-
-                incrementValues = calculated
             } else {
+                /*
+                |--------------------------------------------------------------------------
+                | Manually Entered Payment Schedule
+                |--------------------------------------------------------------------------
+                */
+
                 try {
                     const parsed = JSON.parse(
                         form.incrementValues || "[]"
                     )
 
                     if (Array.isArray(parsed)) {
-                        incrementValues = parsed
+                        paymentSchedule = parsed
                             .map(Number)
                             .filter(Number.isFinite)
                     }
                 } catch {
-                    toast.error("Invalid payment schedule.")
+                    toast.error(
+                        "Invalid payment schedule."
+                    )
+
+                    setLoading(false)
+
                     return
                 }
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Validate Required Fields
+            |--------------------------------------------------------------------------
+            */
+
             if (
+                !required(
+                    form.clientId,
+                    "Client"
+                )
+            ) {
+                setLoading(false)
+                return
+            }
+
+            if (
+                !required(
+                    form.propertyUnit,
+                    "Property Unit"
+                )
+            ) {
+                setLoading(false)
+                return
+            }
+
+            if (
+                !required(
+                    form.type,
+                    "Type"
+                )
+            ) {
+                setLoading(false)
+                return
+            }
+
+            if (
+                !required(
+                    form.unitBlock,
+                    "Block"
+                )
+            ) {
+                setLoading(false)
+                return
+            }
+
+            if (
+                !required(
+                    form.unitLot,
+                    "Lot"
+                )
+            ) {
+                setLoading(false)
+                return
+            }
+
+            if (
+                !required(
+                    form.paymentTerms,
+                    "Payment Terms"
+                )
+            ) {
+                setLoading(false)
+                return
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | Validate Payment Schedule
+            |--------------------------------------------------------------------------
+            */
+
+            if (
+                form.paymentTerms !== "cash" &&
                 !form.autocompute &&
-                incrementValues.length === 0
+                paymentSchedule.length === 0
             ) {
                 toast.error(
                     "Please enter at least one payment schedule."
                 )
+
+                setLoading(false)
+
                 return
             }
 
-            if (!required(form.clientId, "Client")) return
-            if (!required(form.propertyUnit, "Property Unit")) return
-            if (!required(form.type, "Type")) return
-            if (!required(form.unitBlock, "Block")) return
-            if (!required(form.unitLot, "Lot")) return
-            if (!required(form.paymentTerms, "Payment Terms")) return
+            /*
+            |--------------------------------------------------------------------------
+            | Build Database-Safe Payload
+            |--------------------------------------------------------------------------
+            |
+            | IMPORTANT:
+            |
+            | HTML inputs always return strings.
+            |
+            | We do NOT send:
+            |
+            |     totalPropertySize: ""
+            |     sqm: ""
+            |     dueDate: ""
+            |
+            | Instead:
+            |
+            |     number fields -> number | null
+            |     date fields   -> string | null
+            |
+            |--------------------------------------------------------------------------
+            */
 
             const payload = {
-                ...form,
-                incrementValues: JSON.stringify(incrementValues),
+                /*
+                |--------------------------------------------------------------------------
+                | Required / basic fields
+                |--------------------------------------------------------------------------
+                */
+
+                clientId: Number(form.clientId),
+
+                propertyUnit:
+                    form.propertyUnit || null,
+
+                type:
+                    form.type || null,
+
+                /*
+                |--------------------------------------------------------------------------
+                | Numeric fields
+                |--------------------------------------------------------------------------
+                */
+
+                totalPropertySize:
+                    toNumberOrNull(
+                        form.totalPropertySize
+                    ),
+
+                unitBlock:
+                    toNumberOrNull(
+                        form.unitBlock
+                    ),
+
+                unitLot:
+                    toNumberOrNull(
+                        form.unitLot
+                    ),
+
+                downpayment:
+                    toNumberOrNull(
+                        form.downpayment
+                    ),
+
+                interest:
+                    toNumberOrNull(
+                        form.interest
+                    ),
+
+                sqm:
+                    toNumberOrNull(
+                        form.sqm
+                    ),
+
+                incrementAmount:
+                    toNumberOrNull(
+                        form.incrementAmount
+                    ),
+
+                propertyTotalAmount:
+                    toNumberOrNull(
+                        form.propertyTotalAmount
+                    ),
+
+                /*
+                |--------------------------------------------------------------------------
+                | Address
+                |--------------------------------------------------------------------------
+                */
+
+                propertyUnitAddress:
+                    form.propertyUnitAddress ||
+                    null,
+
+                /*
+                |--------------------------------------------------------------------------
+                | Payment Terms
+                |--------------------------------------------------------------------------
+                |
+                | "cash" cannot be converted to a number.
+                | If LotTransaction.paymentTerms is numeric,
+                | cash should be stored as NULL.
+                |
+                |--------------------------------------------------------------------------
+                */
+
+                paymentTerms:
+                    form.paymentTerms === "cash"
+                        ? null
+                        : toNumberOrNull(
+                            form.paymentTerms
+                        ),
+
+                /*
+                |--------------------------------------------------------------------------
+                | Payment Schedule
+                |--------------------------------------------------------------------------
+                */
+
+                incrementValues:
+                    JSON.stringify(
+                        paymentSchedule
+                    ),
+
+                /*
+                |--------------------------------------------------------------------------
+                | Auto Compute
+                |--------------------------------------------------------------------------
+                */
+
+                autocompute:
+                    form.autocompute ? 1 : 0,
+
+                /*
+                |--------------------------------------------------------------------------
+                | Dates
+                |--------------------------------------------------------------------------
+                */
+
+                transactionDate:
+                    toDateOrNull(
+                        form.transactionDate
+                    ),
+
+                dueDate:
+                    toDateOrNull(
+                        form.dueDate
+                    ),
+
+                interestDate:
+                    toDateOrNull(
+                        form.interestDate
+                    ),
             }
+
+            console.log(
+                "Submitting LotTransaction:",
+                payload
+            )
+
+            /*
+            |--------------------------------------------------------------------------
+            | Save Transaction
+            |--------------------------------------------------------------------------
+            */
 
             const res = await fetch(
                 transaction
                     ? `/api/lot-transactions/${transaction.id}`
                     : "/api/lot-transactions",
                 {
-                    method: transaction ? "PUT" : "POST",
+                    method: transaction
+                        ? "PUT"
+                        : "POST",
+
                     headers: {
-                        "Content-Type": "application/json",
+                        "Content-Type":
+                            "application/json",
                     },
-                    body: JSON.stringify(payload),
+
+                    body: JSON.stringify(
+                        payload
+                    ),
                 }
             )
 
@@ -182,13 +569,14 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
 
             if (!res.ok) {
                 throw new Error(
-                    data.message || "Failed saving transaction."
+                    data.message ||
+                    "Failed saving transaction."
                 )
             }
 
             /*
             |--------------------------------------------------------------------------
-            | CREATE DOWNPAYMENT PAYMENT
+            | Create Downpayment Payment
             |--------------------------------------------------------------------------
             */
 
@@ -197,23 +585,38 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                 Number(form.downpayment) > 0 &&
                 data.data?.id
             ) {
-                const paymentRes = await fetch(
-                    "/api/payments",
-                    {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({
-                            lotTransactionId: data.data.id,
-                            amount: Number(form.downpayment),
-                            paymentDate: form.transactionDate,
-                            type: "downpayment",
-                        }),
-                    }
-                )
+                const paymentRes =
+                    await fetch(
+                        "/api/payments",
+                        {
+                            method: "POST",
 
-                const paymentData = await paymentRes.json()
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+                            },
+
+                            body: JSON.stringify({
+                                lotTransactionId:
+                                    data.data.id,
+
+                                amount:
+                                    Number(
+                                        form.downpayment
+                                    ),
+
+                                paymentDate:
+                                    toDateOrNull(
+                                        form.transactionDate
+                                    ),
+
+                                type: "downpayment",
+                            }),
+                        }
+                    )
+
+                const paymentData =
+                    await paymentRes.json()
 
                 if (!paymentRes.ok) {
                     throw new Error(
@@ -223,15 +626,23 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                 }
             }
 
+            /*
+            |--------------------------------------------------------------------------
+            | Success
+            |--------------------------------------------------------------------------
+            */
+
             toast.success(
                 transaction
                     ? "Transaction updated."
                     : "Transaction created."
             )
 
-            router.push("/lot-transactions")
-            router.refresh()
+            router.push(
+                "/lot-transactions"
+            )
 
+            router.refresh()
         } catch (err) {
             console.error(err)
 
@@ -240,27 +651,35 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                     ? err.message
                     : "Something went wrong."
             )
-
         } finally {
             setLoading(false)
         }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Input Styles
+    |--------------------------------------------------------------------------
+    */
+
     const input =
         "w-full rounded-lg border border-[#1f3a40] bg-[#07191E] px-4 py-3 text-white outline-none focus:border-[#02F5A1]"
 
     return (
-
         <form
             onSubmit={handleSubmit}
             className="space-y-8 rounded-2xl border border-[#1f3a40] bg-[#10272D] p-6"
         >
+            {/* -------------------------------------------------------------- */}
+            {/* Transaction Information */}
+            {/* -------------------------------------------------------------- */}
 
             <h2 className="text-xl font-semibold text-white">
                 Transaction Information
             </h2>
 
             <div className="grid gap-5 md:grid-cols-3">
+                {/* Client */}
 
                 <div>
                     <label className="mb-2 block text-sm text-slate-300">
@@ -273,43 +692,60 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                         onChange={handleChange}
                         className={input}
                     >
-                        <option value="">Select Client</option>
+                        <option value="">
+                            Select Client
+                        </option>
 
-                        {clients.map((client) => (
-
-                            <option
-                                key={client.id}
-                                value={client.id}
-                            >
-                                {client.firstName} {client.lastName}
-                            </option>
-
-                        ))}
-
+                        {clients.map(
+                            (client) => (
+                                <option
+                                    key={client.id}
+                                    value={
+                                        client.id
+                                    }
+                                >
+                                    {
+                                        client.firstName
+                                    }{" "}
+                                    {
+                                        client.lastName
+                                    }
+                                </option>
+                            )
+                        )}
                     </select>
-
                 </div>
 
                 <Input
                     label="Property Unit"
                     name="propertyUnit"
-                    value={form.propertyUnit}
-                    onChange={handleChange}
+                    value={
+                        form.propertyUnit
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <SelectInput
                     label="Type"
                     name="type"
                     value={form.type}
-                    onChange={handleChange}
+                    onChange={
+                        handleChange
+                    }
                     options={[
                         {
-                            value: "with_property",
-                            label: "With Property",
+                            value:
+                                "with_property",
+                            label:
+                                "With Property",
                         },
                         {
-                            value: "vacant_lot",
-                            label: "Vacant Lot",
+                            value:
+                                "vacant_lot",
+                            label:
+                                "Vacant Lot",
                         },
                     ]}
                 />
@@ -317,30 +753,48 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                 <Input
                     label="Block"
                     name="unitBlock"
-                    value={form.unitBlock}
-                    onChange={handleChange}
+                    type="number"
+                    value={
+                        form.unitBlock
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
                     label="Lot"
                     name="unitLot"
-                    value={form.unitLot}
-                    onChange={handleChange}
+                    type="number"
+                    value={
+                        form.unitLot
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
                     label="Property Address"
                     name="propertyUnitAddress"
-                    value={form.propertyUnitAddress}
-                    onChange={handleChange}
+                    value={
+                        form.propertyUnitAddress
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
                     label="Property Size"
                     name="totalPropertySize"
                     type="number"
-                    value={form.totalPropertySize}
-                    onChange={handleChange}
+                    value={
+                        form.totalPropertySize
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
@@ -348,12 +802,15 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                     name="sqm"
                     type="number"
                     value={form.sqm}
-                    onChange={handleChange}
+                    onChange={
+                        handleChange
+                    }
                 />
-
-
-
             </div>
+
+            {/* -------------------------------------------------------------- */}
+            {/* Dates */}
+            {/* -------------------------------------------------------------- */}
 
             <h2 className="text-xl font-semibold text-white">
                 Dates
@@ -364,8 +821,12 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                     label="Transaction Date"
                     name="transactionDate"
                     type="date"
-                    value={form.transactionDate}
-                    onChange={handleChange}
+                    value={
+                        form.transactionDate
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
@@ -373,45 +834,66 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                     name="dueDate"
                     type="date"
                     value={form.dueDate}
-                    onChange={handleChange}
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
                     label="Interest Date"
                     name="interestDate"
                     type="date"
-                    value={form.interestDate}
-                    onChange={handleChange}
+                    value={
+                        form.interestDate
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
             </div>
+
+            {/* -------------------------------------------------------------- */}
+            {/* Payment Information */}
+            {/* -------------------------------------------------------------- */}
 
             <h2 className="text-xl font-semibold text-white">
                 Payment Information
             </h2>
+
             <div className="grid gap-5 md:grid-cols-3">
-
-
                 <Input
                     label="Total Amount"
                     name="propertyTotalAmount"
                     type="number"
-                    value={form.propertyTotalAmount}
-                    onChange={handleChange}
+                    value={
+                        form.propertyTotalAmount
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
                     label="Downpayment"
                     name="downpayment"
                     type="number"
-                    value={form.downpayment}
-                    onChange={handleChange}
+                    value={
+                        form.downpayment
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <SelectInput
                     label="Payment Terms"
                     name="paymentTerms"
-                    value={form.paymentTerms}
-                    onChange={handleChange}
+                    value={
+                        form.paymentTerms
+                    }
+                    onChange={
+                        handleChange
+                    }
                     options={[
                         {
                             value: "cash",
@@ -448,71 +930,114 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                     label="Interest"
                     name="interest"
                     type="number"
-                    value={form.interest}
-                    onChange={handleChange}
+                    value={
+                        form.interest
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
 
                 <Input
                     label="Increment Amount"
                     name="incrementAmount"
                     type="number"
-                    value={form.incrementAmount}
-                    onChange={handleChange}
+                    value={
+                        form.incrementAmount
+                    }
+                    onChange={
+                        handleChange
+                    }
                 />
             </div>
 
+            {/* -------------------------------------------------------------- */}
+            {/* Auto Compute */}
+            {/* -------------------------------------------------------------- */}
 
             <label className="flex items-center gap-3 text-white">
-
                 <button
                     type="button"
                     onClick={() =>
-                        setForm(prev => ({
-                            ...prev,
-                            autocompute: prev.autocompute === 1 ? 0 : 1,
-                        }))
+                        setForm(
+                            (prev) => ({
+                                ...prev,
+                                autocompute:
+                                    prev.autocompute ===
+                                        1
+                                        ? 0
+                                        : 1,
+                            })
+                        )
                     }
-                    className={`relative h-7 w-12 rounded-full transition ${form.autocompute ? "bg-[#02F5A1]" : "bg-slate-600"
+                    className={`relative h-7 w-12 rounded-full transition ${form.autocompute
+                            ? "bg-[#02F5A1]"
+                            : "bg-slate-600"
                         }`}
                 >
                     <span
-                        className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${form.autocompute ? "left-6" : "left-1"
+                        className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${form.autocompute
+                                ? "left-6"
+                                : "left-1"
                             }`}
                     />
                 </button>
 
-                <span>Auto Compute</span>
-
+                <span>
+                    Auto Compute
+                </span>
             </label>
 
-            {/* 👇 Put it here */}
+            {/* -------------------------------------------------------------- */}
+            {/* Auto Computed Schedule */}
+            {/* -------------------------------------------------------------- */}
+
             {form.autocompute ? (
-                incrementValues && incrementValues.length > 0 && (
+                incrementValues &&
+                incrementValues.length >
+                0 && (
                     <div className="rounded-xl border border-[#1f3a40] bg-[#07191E] p-4">
                         <h3 className="mb-3 text-sm font-semibold text-white">
-                            Auto Computed Payment Schedule
+                            Auto Computed Payment
+                            Schedule
                         </h3>
 
                         <div className="space-y-2">
-                            {incrementValues.map((value, index) => (
-                                <div
-                                    key={index}
-                                    className="flex items-center justify-between rounded-lg bg-[#10272D] px-4 py-2"
-                                >
-                                    <span className="text-slate-300">
-                                        Years {index * 5 + 1} - {(index + 1) * 5}
-                                    </span>
+                            {incrementValues.map(
+                                (
+                                    value,
+                                    index
+                                ) => (
+                                    <div
+                                        key={
+                                            index
+                                        }
+                                        className="flex items-center justify-between rounded-lg bg-[#10272D] px-4 py-2"
+                                    >
+                                        <span className="text-slate-300">
+                                            Years{" "}
+                                            {index *
+                                                5 +
+                                                1}{" "}
+                                            -{" "}
+                                            {(index +
+                                                1) *
+                                                5}
+                                        </span>
 
-                                    <span className="font-semibold text-[#02F5A1]">
-                                        ₱{value.toLocaleString()}
-                                    </span>
-                                </div>
-                            ))}
+                                        <span className="font-semibold text-[#02F5A1]">
+                                            ₱
+                                            {value.toLocaleString()}
+                                        </span>
+                                    </div>
+                                )
+                            )}
                         </div>
                     </div>
                 )
             ) : (
-                Number(form.paymentTerms) >= 5 && (
+                Number(form.paymentTerms) >=
+                5 && (
                     <div className="rounded-xl border border-[#1f3a40] bg-[#07191E] p-4">
                         <h3 className="mb-3 text-sm font-semibold text-white">
                             Payment Schedule
@@ -522,36 +1047,37 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                             {Array.from(
                                 {
                                     length: Math.floor(
-                                        Number(form.paymentTerms) / 5
-                                    )
+                                        Number(
+                                            form.paymentTerms
+                                        ) /
+                                        5
+                                    ),
                                 },
-                                (_, index) => {
-
+                                (
+                                    _,
+                                    index
+                                ) => {
                                     const values =
-                                        form.incrementValues
-                                            ? (() => {
-                                                try {
-                                                    const parsed =
-                                                        JSON.parse(
-                                                            form.incrementValues
-                                                        )
-
-                                                    return Array.isArray(parsed)
-                                                        ? parsed
-                                                        : []
-                                                } catch {
-                                                    return []
-                                                }
-                                            })()
-                                            : []
+                                        parsePaymentSchedule(
+                                            form.incrementValues
+                                        )
 
                                     return (
                                         <div
-                                            key={index}
+                                            key={
+                                                index
+                                            }
                                             className="flex items-center justify-between rounded-lg bg-[#10272D] px-4 py-3"
                                         >
                                             <span className="text-sm text-slate-300">
-                                                Years {index * 5 + 1} - {(index + 1) * 5}
+                                                Years{" "}
+                                                {index *
+                                                    5 +
+                                                    1}{" "}
+                                                -{" "}
+                                                {(index +
+                                                    1) *
+                                                    5}
                                             </span>
 
                                             <div className="flex items-center gap-2">
@@ -561,18 +1087,38 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
 
                                                 <input
                                                     type="number"
-                                                    value={values[index] ?? ""}
-                                                    onChange={(e) => {
-                                                        const updated = [...values]
+                                                    value={
+                                                        values[
+                                                        index
+                                                        ] ??
+                                                        ""
+                                                    }
+                                                    onChange={(
+                                                        e
+                                                    ) => {
+                                                        const updated =
+                                                            [
+                                                                ...values,
+                                                            ]
 
-                                                        updated[index] =
-                                                            e.target.value
+                                                        updated[
+                                                            index
+                                                        ] =
+                                                            e
+                                                                .target
+                                                                .value
 
-                                                        setForm(prev => ({
-                                                            ...prev,
-                                                            incrementValues:
-                                                                JSON.stringify(updated)
-                                                        }))
+                                                        setForm(
+                                                            (
+                                                                prev
+                                                            ) => ({
+                                                                ...prev,
+                                                                incrementValues:
+                                                                    JSON.stringify(
+                                                                        updated
+                                                                    ),
+                                                            })
+                                                        )
                                                     }}
                                                     className="w-40 rounded-lg border border-[#1f3a40] bg-[#07191E] px-3 py-2 text-right text-white outline-none focus:border-[#02F5A1]"
                                                     placeholder="0.00"
@@ -587,26 +1133,35 @@ export function TransactionForm({ transaction }: TransactionFormProps) {
                 )
             )}
 
+            {/* -------------------------------------------------------------- */}
+            {/* Submit */}
+            {/* -------------------------------------------------------------- */}
+
             <button
                 type="submit"
                 disabled={loading}
-                className="rounded-lg bg-[#02F5A1] px-6 py-3 font-semibold text-black"
+                className="rounded-lg bg-[#02F5A1] px-6 py-3 font-semibold text-black transition hover:bg-[#00d98d] disabled:cursor-not-allowed disabled:opacity-50"
             >
-                {loading ? "Saving..." : "Save Transaction"}
+                {loading
+                    ? "Saving..."
+                    : "Save Transaction"}
             </button>
-
         </form>
-
     )
-
 }
 
-function Input({ label, ...props }: any) {
+/*
+|--------------------------------------------------------------------------
+| Input Component
+|--------------------------------------------------------------------------
+*/
 
+function Input({
+    label,
+    ...props
+}: any) {
     return (
-
         <div>
-
             <label className="mb-2 block text-sm text-slate-300">
                 {label}
             </label>
@@ -615,23 +1170,23 @@ function Input({ label, ...props }: any) {
                 {...props}
                 className="w-full rounded-lg border border-[#1f3a40] bg-[#07191E] px-4 py-3 text-white outline-none focus:border-[#02F5A1]"
             />
-
         </div>
-
     )
-
 }
+
+/*
+|--------------------------------------------------------------------------
+| Select Component
+|--------------------------------------------------------------------------
+*/
 
 function SelectInput({
     label,
     options,
     ...props
 }: any) {
-
     return (
-
         <div>
-
             <label className="mb-2 block text-sm text-slate-300">
                 {label}
             </label>
@@ -644,22 +1199,32 @@ function SelectInput({
                     Select {label}
                 </option>
 
-                {options.map((option: any) => (
-                    <option
-                        key={option.value}
-                        value={option.value}
-                    >
-                        {option.label}
-                    </option>
-                ))}
-
+                {options.map(
+                    (option: any) => (
+                        <option
+                            key={
+                                option.value
+                            }
+                            value={
+                                option.value
+                            }
+                        >
+                            {
+                                option.label
+                            }
+                        </option>
+                    )
+                )}
             </select>
-
         </div>
-
     )
-
 }
+
+/*
+|--------------------------------------------------------------------------
+| Calculate Payment Schedule
+|--------------------------------------------------------------------------
+*/
 
 function calculateIncrementValues(
     totalAmount: number,
@@ -667,30 +1232,140 @@ function calculateIncrementValues(
     paymentYears: number,
     increment: number
 ) {
+    const financedAmount =
+        totalAmount - downpayment
 
-    const financedAmount = totalAmount - downpayment
-    const months = paymentYears * 12
-    const blocks = paymentYears / 5
+    const months =
+        paymentYears * 12
 
-    const series = (blocks * (blocks - 1)) / 2
+    const blocks =
+        paymentYears / 5
+
+    const series =
+        (blocks * (blocks - 1)) /
+        2
 
     const startingPayment =
-        (financedAmount - increment * 60 * series) / months
+        (financedAmount -
+            increment *
+            60 *
+            series) /
+        months
 
-    if (startingPayment < 0) {
+    if (
+        !Number.isFinite(
+            startingPayment
+        ) ||
+        startingPayment < 0
+    ) {
         return null
     }
 
     return Array.from(
-        { length: blocks },
-        (_, i) => Number((startingPayment + increment * i).toFixed(2))
+        {
+            length: blocks,
+        },
+        (_, i) =>
+            Number(
+                (
+                    startingPayment +
+                    increment * i
+                ).toFixed(2)
+            )
     )
 }
 
-function required(value: string, label: string) {
-    if (!value) {
-        toast.error(`${label} is required.`);
-        return false;
+/*
+|--------------------------------------------------------------------------
+| Helpers
+|--------------------------------------------------------------------------
+*/
+
+/**
+ * Converts an optional form value to a number.
+ *
+ * ""     -> null
+ * "1000" -> 1000
+ * "0"    -> 0
+ */
+function toNumberOrNull(
+    value: unknown
+): number | null {
+    if (
+        value === "" ||
+        value === null ||
+        value === undefined
+    ) {
+        return null
     }
-    return true;
+
+    const number = Number(value)
+
+    return Number.isFinite(number)
+        ? number
+        : null
+}
+
+/**
+ * Converts an optional date to a database-safe value.
+ *
+ * "" -> null
+ * "2026-08-21" -> "2026-08-21"
+ */
+function toDateOrNull(
+    value: unknown
+): string | null {
+    if (
+        value === "" ||
+        value === null ||
+        value === undefined
+    ) {
+        return null
+    }
+
+    return String(value)
+}
+
+/**
+ * Safely parses the manually entered
+ * payment schedule.
+ */
+function parsePaymentSchedule(
+    value: string
+): any[] {
+    if (!value) {
+        return []
+    }
+
+    try {
+        const parsed =
+            JSON.parse(value)
+
+        return Array.isArray(parsed)
+            ? parsed
+            : []
+    } catch {
+        return []
+    }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Required Validation
+|--------------------------------------------------------------------------
+*/
+
+function required(
+    value: string,
+    label: string
+) {
+    if (!value) {
+        toast.error(
+            `${label} is required.`
+        )
+
+        return false
+    }
+
+    return true
 }
